@@ -1,0 +1,42 @@
+[project]
+name = "eu_consultations"
+version = "0.1.0"
+description = "A Python package for scraping textual data from EU public consultations"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp-retry>=2.9.1",
+    "asyncio>=3.4.3",
+    "bson>=0.5.10",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "pandas>=2.2.3",
+    "pytest>=8.3.5",
+    "srsly>=2.5.1",
+    "dataclasses>=0.8",
+    "dataclass-wizard>=0.35.0",
+    "tqdm>=4.67.1",
+    "docling>=2.26.0",
+]
+
+[dependency-groups]
+dev = [
+    "ptpython>=3.0.29",
+    "ruff>=0.9.9",
+]
+
+[build-system]
+requires = ['setuptools']
+build-backend = 'setuptools.build_meta'
+
+[tool.pytest.ini_options]
+log_level = "INFO"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
