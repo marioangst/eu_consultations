@@ -5,18 +5,20 @@ from typing import List, Union, Optional
 
 from dataclass_wizard import JSONWizard, CatchAll
 
+
 @dataclass
 class Consultation(JSONWizard):
     """
     Consultation dataclass
 
     """
+
     id: int
     short_title: str
     topic: str
     publication_id: int
     total_feedback: int
-    feedback: List['Feedback']
+    feedback: List["Feedback"]
     extra_consultation_fields: CatchAll
     front_end_stage: Optional[str] = None
 
@@ -27,8 +29,9 @@ class Feedback(JSONWizard):
     Feedback dataclass
 
     """
+
     id: int
-    attachments: List['Attachment']
+    attachments: List["Attachment"]
     extra_feedback_fields: CatchAll
     status: Optional[str] = None
     date_feedback: Optional[str] = None
@@ -61,6 +64,7 @@ class Attachment(JSONWizard):
     Attachment dataclass
 
     """
+
     id: int
     file_name: str
     document_id: Union[str, float]
@@ -68,7 +72,8 @@ class Attachment(JSONWizard):
     extra_attachment_fields: CatchAll
     downloaded_filepath: Optional[str] = None
     extracted_text: Optional[str] = None
-    docling_json: Optional['DoclingDump'] = None
+    docling_json: Optional["DoclingDump"] = None
+
 
 @dataclass
 class DoclingDump(JSONWizard):

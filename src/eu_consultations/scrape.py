@@ -19,19 +19,21 @@ from eu_consultations.utils_scraping import (
 )
 from eu_consultations.consultation_data import Consultation
 
+
 def show_available_topics():
-    return(TOPICS)
+    return TOPICS
+
 
 async def async_scrape(
     topic_list: list,
     max_pages: int | None,
     max_feedback: int | None,
-    stream_out_folder: str | os.PathLike | None = None
+    stream_out_folder: str | os.PathLike | None = None,
 ) -> List[Consultation]:
     """Scrape consultation data from backend API of EU website
-    
+
     Scrapes data from https://ec.europa.eu/info/law/better-regulation
-    
+
     Args:
         topic_list: topics to scrape
         max_pages: set limit on number of pages to scrape.
@@ -94,19 +96,24 @@ async def async_scrape(
                     consultations.extend(consultations_on_page)
                     if stream_out_folder is not None:
                         save_to_json(
-                            consultations = consultations_on_page,
+                            consultations=consultations_on_page,
                             output_folder=stream_out_folder,
-                            filename=os.path.join("page" + str(page-1) + ".json"))
+                            filename=os.path.join("page" + str(page - 1) + ".json"),
+                        )
                 except JSONWizardError as exc:
-                    logger.error(f"Data {feedback_info_str} did not conform to data model (Consultation). {exc}")
-    return(consultations)
+                    logger.error(
+                        f"Data {feedback_info_str} did not conform to data model (Consultation). {exc}"
+                    )
+    return consultations
+
 
 def save_to_json(
-    consultations: List[Consultation], 
+    consultations: List[Consultation],
     output_folder: str | os.PathLike,
-    filename: str | os.PathLike):
+    filename: str | os.PathLike,
+):
     """Save consultation data to JSON
-        
+
     Args:
         consultations: Consultation dataclass object (probably created with eu_consultation_scrape.scrape.async_scrape)
         output_folder: folder to save JSON file to as "consultation_data.json"
@@ -115,18 +122,21 @@ def save_to_json(
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     logger.info(f"Saving data to {json_output_path}")
-    srsly.write_json(json_output_path, [instance.to_dict() for instance in consultations])
+    srsly.write_json(
+        json_output_path, [instance.to_dict() for instance in consultations]
+    )
 
-def read_consultations_from_json(
-    filepath: str | os.PathLike) -> List[Consultation]:
+
+def read_consultations_from_json(filepath: str | os.PathLike) -> List[Consultation]:
     """Save consultation data to JSON
-        
+
     Args:
         filepath: path JSON of scraped consultations
     """
     scraped_json = srsly.read_json(filepath)
     consultations = Consultation.from_list(scraped_json)
-    return(consultations)
+    return consultations
+
 
 def scrape(
     topic_list: list,
@@ -136,9 +146,9 @@ def scrape(
     max_feedback: int | None = None,
 ) -> List[Consultation]:
     """Scrape consultation data from backend API of EU website
-    
+
     Scrapes data from https://ec.europa.eu/info/law/better-regulation
-    
+
     Args:
         topic_list: list of topics (as defined by the EU) to scrape. See eu_consultation_scraper.utils_scraping.TOPICS for the complete list of available topics.
         max_pages: set limit on number of pages to scrape. defaults to None (all pages)
@@ -152,6 +162,8 @@ def scrape(
             topic_list=topic_list,
             max_pages=max_pages,
             max_feedback=max_feedback,
-            stream_out_folder=os.path.join(output_folder,"pages")))
+            stream_out_folder=os.path.join(output_folder, "pages"),
+        )
+    )
     save_to_json(consultation_data, output_folder, filename)
-    return(consultation_data)
+    return consultation_data
