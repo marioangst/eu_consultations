@@ -45,7 +45,7 @@ Now let's scrape all metadata on feedback to consultations on the the topic "DIG
 ```python
 from eu_consultations.scrape import scrape
 
-consultation_data = scrape(
+initiatives_data = scrape(
     topic_list=["DIGITAL"],
     max_pages=None, # restrict number of frontend pages to crawl
     max_feedback = None, # set a maximum number of feedback to gather
@@ -65,13 +65,13 @@ Using our previous initial scrape, we can now download all attached files to fee
 from eu_consultations.extract_filetext import download_consultation_files
 
 data_with_downloads = download_consultation_files(
-    consultation_data = consultation_data,
+    initiatives_data = initiatives_data,
     output_folder=<my-folder>)
 ```
 
 This:
 - downloads all attached files to <my-folder>/files
-- returns a list of `eu_consultations.consultation_data.Consultations` dataclass objects with file locations attached
+- returns a list of `eu_consultations.consultation_data.Initiative` dataclass objects with file locations attached
 
 ### 3) Extract texts
 
@@ -81,7 +81,7 @@ A lot of feedback to consultations already contains text on the opinions of the 
 from eu_consultations.extract_filetext import extract_text_from_attachments
 
 data_with_extracted_text = extract_text_from_attachments(
-    consultation_data_with_attachments = data_with_downloads, #created in step 2)
+    initiatives_data_with_attachments = data_with_downloads, #created in step 2)
     stream_out_folder = <my-folder>/files #let's stream out to the same location as files
 )
 ```
@@ -89,7 +89,7 @@ data_with_extracted_text = extract_text_from_attachments(
 This:
 - extracts text from all files referenced in `data_with_downloads`
 - stores extracted text in lossless Docling JSON format per document at the folder set by stream_out_folder in a sub-directory `docling/` and per consultation at a sub-directory `consultations/`
-- returns a list of `eu_consultations.consultation_data.Consultations` dataclass objects with text and docling JSON attached.
+- returns a list of `eu_consultations.consultation_data.Initiative` dataclass objects with text and docling JSON attached.
 
 We can save the object, but be aware, it might be quite large:
 
@@ -98,12 +98,12 @@ from eu_consultations.scrape import save_to_json
 
 save_to_json(data_with_extracted_text, 
     <my-folder>, 
-    filename="consultations_with_extracted.json")
+    filename="initiatives_with_extracted.json")
 ```
 
 ### Load serialized consultation data
 
-If you have exported output from any of the above steps using `eu_consultations.scrape.save_to_json`, you can re-import into a list of `eu_consultations.consultation_data.Consultations` objects with `eu_consultations.scrape.read_consultations_from_json`.
+If you have exported output from any of the above steps using `eu_consultations.scrape.save_to_json`, you can re-import into a list of `eu_consultations.consultation_data.Initiative` objects with `eu_consultations.scrape.read_initiatives_from_json`.
 
 ## Development
 
