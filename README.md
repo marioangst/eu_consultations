@@ -54,9 +54,8 @@ consultation_data = scrape(
 ```
 
 This:
-- saves all frontend pages crawled in a subdirectory <my-folder>/pages
 - serializes all data to <my-filename>.json in <my-folder>
-- returns a list of `eu_consultations.consultation_data.Consultations` dataclass objects, which store feedback data per consultation
+- returns a list of `eu_consultations.consultation_data.Initiative` dataclass objects, which store feedback data per consultation
 
 ### 2) Download files attached to consultation feedback
 

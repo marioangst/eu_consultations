@@ -7,6 +7,14 @@ from dataclass_wizard import JSONWizard, CatchAll
 
 
 @dataclass
+class Initiative(JSONWizard):
+    id: int
+    short_title: str
+    extra_initiative_fields: CatchAll
+    consultations: Optional[List["Consultation"]] | None = None
+
+
+@dataclass
 class Consultation(JSONWizard):
     """
     Consultation dataclass
@@ -14,13 +22,9 @@ class Consultation(JSONWizard):
     """
 
     id: int
-    short_title: str
-    topic: str
-    publication_id: int
     total_feedback: int
-    feedback: List["Feedback"]
     extra_consultation_fields: CatchAll
-    front_end_stage: Optional[str] = None
+    feedback: Optional[List["Feedback"]] | None = None
 
 
 @dataclass

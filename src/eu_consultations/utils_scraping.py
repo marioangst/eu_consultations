@@ -1,8 +1,10 @@
-import asyncio
-from aiohttp.client_exceptions import ClientOSError
-from bson import ObjectId
-from loguru import logger
+from typing import List
+
 import httpx
+from tqdm import tqdm
+from loguru import logger
+
+from eu_consultations.consultation_data import Initiative, Consultation, Feedback
 
 TOPICS = {
     "AGRI": "Agriculture and rural development",
@@ -51,261 +53,149 @@ BASE_URL = "https://ec.europa.eu/info/law/better-regulation"
 
 API_PATH_INITIATIVES = "/brpapi/searchInitiatives?"
 API_PATH_PUBLICATIONS = "/brpapi/groupInitiatives/"
-API_PATH_FEEDBACK = f"/api/allFeedback?publicationId={{}}&keywords=&language=EN&page={{}}&size={INITIATIVES_PAGE_SIZE}&sort=dateFeedback,DESC"
+FEEDBACK_URL = "/api/allFeedback"
 
 
-def convert_objectid_to_str(data):
-    if isinstance(data, list):
-        return [convert_objectid_to_str(item) for item in data]
-    elif isinstance(data, dict):
-        return {key: convert_objectid_to_str(value) for key, value in data.items()}
-    elif isinstance(data, ObjectId):
-        return str(data)
-    else:
-        return data
+# getting consultation ids
 
 
-# scraping data by initiatives topics.
-async def fetch_data(session, url, params=None, semaphore=None, timeout=10):
-    async with semaphore:
-        try:
-            async with session.get(url, params=params) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    logger.warning(f"Error: {response.status} for URL: {url}")
-                    return "no data"
-        except asyncio.TimeoutError:
-            logger.error(f"TimeoutError for URL: {url}")
-            return "no data"
-        except ClientOSError:
-            logger.error(f"ClientOSError for URL: {url}")
-            return "no data"
-
-
-def get_total_pages_initiatives(topic=None, size=INITIATIVES_PAGE_SIZE) -> int:
-    if topic is None:
-        r = httpx.get(
-            BASE_URL + API_PATH_INITIATIVES, params={"size": size}, timeout=None
-        )
-    else:
-        r = httpx.get(
-            BASE_URL + API_PATH_INITIATIVES,
-            params={"topic": topic, "size": size},
-            timeout=None,
-        )
+def get_total_pages_initiatives(topic: str) -> int:
+    url = BASE_URL + API_PATH_INITIATIVES
+    params = {"topic": topic, "page": 0, "size": INITIATIVES_PAGE_SIZE}
+    r = httpx.get(url, params=params, timeout=None)
     total_pages = r.json()["page"]["totalPages"]
     return total_pages
 
 
-# Pipeline 1: get all ids of initiatives for topic
-async def get_initiatives_ids(session, topic, size, language, page, semaphore) -> list:
+def get_ids_for_page_initiatives(topic, page) -> List[int]:
     url = BASE_URL + API_PATH_INITIATIVES
-    params = {"topic": topic, "size": size, "language": language, "page": page}
-    data = await fetch_data(session, url, params, semaphore)
-    if data in ["no data", None]:
-        return []
-
-    initiatives_data = data.get("_embedded", {}).get("initiativeResultDtoes", [])
-    id_list = [int(item.get("id")) for item in initiatives_data]
-    return id_list
+    params = {"topic": topic, "page": page, "size": INITIATIVES_PAGE_SIZE}
+    r = httpx.get(url, params=params, timeout=None)
+    initiatives = r.json()["_embedded"]["initiativeResultDtoes"]
+    ids = [int(initiative["id"]) for initiative in initiatives]
+    return ids
 
 
-# Pipeline 2: get publication id
-async def get_publication_id(session, id_list, semaphore, max_feedback: int | None):
-    pubid = []
-
-    tasks = []
-    for id in id_list:
-        url = BASE_URL + API_PATH_PUBLICATIONS + f"{id}"
-        tasks.append(fetch_data(session, url, semaphore=semaphore))
-
-    responses = await asyncio.gather(*tasks)
-    for id, data in zip(id_list, responses):
-        if not isinstance(data, dict):
-            continue
-        short_title = data.get("shortTitle")
-        publications_data = data.get("publications", [])
-        publication_ids = []
-        frontendstage = []
-        totalFeedback = []
-        for item in publications_data:
-            publi_id = item.get("id")
-            total_Feedback = item.get("totalFeedback")
-            frontEndStage = item.get("frontEndStage")
-            # threshold check here
-            if total_Feedback == 0:
-                logger.info(
-                    f"item skipped due to zero feedback: initiative id {id}, publication id {publi_id} {frontEndStage} "
-                )
-                continue
-            if max_feedback is not None:
-                if total_Feedback > max_feedback:
-                    logger.warning(
-                        f"item skipped due to feedback > {max_feedback} setting: initiative id {id}, publication id {publi_id} {frontEndStage})"
-                    )
-                    continue
-            publication_ids.append(publi_id)
-            frontendstage.append(frontEndStage)
-            totalFeedback.append(total_Feedback)
-        if publication_ids:  # only append if there are valid publication IDs
-            pubid.append(
-                {
-                    "id": id,
-                    "shortTitle": short_title,
-                    "publicationId": publication_ids,
-                    "frontEndStage": frontendstage,
-                    "totalFeedback": totalFeedback,
-                }
-            )
-        logger.info(f"Initiative {id} done")
-
-    return pubid
+def get_ids_for_topic(topic: str, max_pages: int | None = None) -> List[int]:
+    if max_pages is not None:
+        total_pages = max_pages
+        logger.warning(f"scrapping only {max_pages} page due to max_pages setting")
+    else:
+        total_pages = get_total_pages_initiatives(topic)
+    ids = []
+    for page in tqdm(range(0, total_pages), desc="Gathering page ids"):
+        page_ids = get_ids_for_page_initiatives(topic, page)
+        ids.extend(page_ids)
+    return ids
 
 
-# Pipeline 3: Get feedback information
-async def get_feedback_info(
-    session, pubid, topic, semaphore, limit_feedback: int | None = None
-):
-    feedback_info = []
-
-    tasks = []
-    for item in pubid:
-        id = item["id"]
-        shortTitle = item["shortTitle"]
-        publicationId = item["publicationId"]
-        frontendstage = item["frontEndStage"]
-        totalFeedback = item["totalFeedback"]
-        for i, pub_id in enumerate(publicationId):
-            tasks.append(
-                fetch_feedback(
-                    session,
-                    id,
-                    shortTitle,
-                    topic,
-                    pub_id,
-                    frontendstage[i],
-                    totalFeedback[i],
-                    semaphore,
-                )
-            )
-
-    feedback_results = await asyncio.gather(*tasks)
-    feedback_info.extend(feedback_results)
-    feedback_info = process_data(feedback_info)
-
-    return feedback_info
+# get data on initiatives for specific initiative id
 
 
-async def fetch_feedback(
-    session, id, shortTitle, topic, pub_id, frontendstage, totalFeedback, semaphore
-):
-    feedback_info_url = BASE_URL + API_PATH_FEEDBACK
-    feedback_data = []
-    page_number = 0
-    while True:
-        url = feedback_info_url.format(pub_id, page_number)
-        data = await fetch_data(session, url, semaphore=semaphore)
-        if data == "no data":
-            new_dic = {
-                "id": id,
-                "shortTitle": shortTitle,
-                "topic": TOPICS.get(topic, "no topic"),
-                "publicationId": pub_id,
-                "frontEndStage": frontendstage,
-                "totalFeedback": totalFeedback,
-                "feedback": "no data",
-            }
-            return new_dic
-        elif data:
-            feedback_embedded = data.get("_embedded", {}).get("feedback", [])
-            if not feedback_embedded:
-                new_dic = {
-                    "id": id,
-                    "shortTitle": shortTitle,
-                    "topic": TOPICS.get(topic, "no topic"),
-                    "publicationId": pub_id,
-                    "frontEndStage": frontendstage,
-                    "totalFeedback": totalFeedback,
-                    "feedback": "no data",
-                }
-                return new_dic
+def get_initiative_data(id: int) -> Initiative:
+    # get all publications under id
+    url = BASE_URL + API_PATH_PUBLICATIONS + str(id)
+    r = httpx.get(url)
+    data = r.json()
+    consultations_list = Consultation.from_list(data["publications"])
+    initiative = Initiative.from_dict(
+        {i: data[i] for i in data if i not in "publications"}
+    )
+    initiative.consultations = consultations_list
+    return initiative
 
-            # Process attachments within each feedback
-            for feedback in feedback_embedded:
-                if "attachments" in feedback:
-                    for attachment in feedback["attachments"]:
-                        attachment["links"] = (
-                            f"https://ec.europa.eu/info/law/better-regulation/api/download/{attachment['documentId']}"
-                        )
-                        # Keep only id, fileName, documentId and links
-                        attachment = {
-                            "id": attachment.get("id"),
-                            "fileName": attachment.get("fileName"),
-                            "documentId": attachment.get("documentId"),
-                            "links": attachment["links"],
-                        }
-                feedback_data.append(feedback)
 
-            total_page = data.get("page", {}).get("totalPages", 0)
-            if page_number >= total_page - 1:
-                break
-            page_number += 1
-        else:
-            break
+# getting publications with potential feedbacks for initiatives
 
-    new_dic = {
-        "id": id,
-        "shortTitle": shortTitle,
-        "topic": TOPICS.get(topic, "no topic"),
-        "publicationId": pub_id,
-        "frontEndStage": frontendstage,
-        "totalFeedback": totalFeedback,
-        "feedback": feedback_data,
+
+def get_total_pages_feedback(consultation: Consultation) -> int:
+    url = BASE_URL + "/api/allFeedback"
+    params = {
+        "publicationId": consultation.id,
+        "size": INITIATIVES_PAGE_SIZE,
+        "page": 0,
     }
-    return new_dic
+    r = httpx.get(url, params=params)
+    total_pages = r.json()["page"]["totalPages"]
+    return total_pages
 
 
-# process data, delete unnecessary information of data
-def process_data(feedback_info):
-    processed_feedback_info = []
+def get_feedback_for_page(consultation, page) -> List[Feedback]:
+    url = BASE_URL + "/api/allFeedback"
+    params = {
+        "publicationId": consultation.id,
+        "size": INITIATIVES_PAGE_SIZE,
+        "page": page,
+    }
+    r = httpx.get(url, params=params)
+    # remove _links data
+    feedback_data = r.json()["_embedded"]["feedback"]
+    for feedback in feedback_data:
+        if "_links" in feedback:
+            del feedback["_links"]
+            # Process attachments field
+        if "attachments" in feedback:
+            for attachment in feedback["attachments"]:
+                attachment["links"] = (
+                    f"https://ec.europa.eu/info/law/better-regulation/api/download/{attachment['documentId']}"
+                )
+                # Remove unwanted fields
+                keys_to_remove = set(attachment.keys()) - {
+                    "id",
+                    "fileName",
+                    "documentId",
+                    "links",
+                }
+                for key in keys_to_remove:
+                    del attachment[key]
+    feedbacks = Feedback.from_list(feedback_data)
+    return feedbacks
 
-    for item in feedback_info:
-        if item["feedback"] != "no data":
-            feedback_data = item["feedback"]
-            for feedback in feedback_data:
-                # Remove _links field within each feedback
-                if "_links" in feedback:
-                    del feedback["_links"]
 
-                # Process attachments field
-                if "attachments" in feedback:
-                    attachments = feedback["attachments"]
-                    for attachment in attachments:
-                        attachment_id = attachment.get("id")
-                        file_name = attachment.get("fileName")
-                        document_id = attachment.get("documentId")
-                        attachment["id"] = attachment_id
-                        attachment["fileName"] = file_name
-                        attachment["documentId"] = document_id
-                        attachment["links"] = (
-                            f"https://ec.europa.eu/info/law/better-regulation/api/download/{document_id}"
-                        )
-                        # Remove unwanted fields
-                        keys_to_remove = set(attachment.keys()) - {
-                            "id",
-                            "fileName",
-                            "documentId",
-                            "links",
-                        }
-                        for key in keys_to_remove:
-                            del attachment[key]
+def get_feedback_for_consultation(
+    consultation: Consultation, max_feedback: int | None = None
+) -> List[Feedback] | None:
+    if consultation.total_feedback == 0:
+        return None
+    if max_feedback is not None:
+        if consultation.total_feedback > max_feedback:
+            logger.warning(
+                f"skipping consultation {consultation.id} because of max_feedback setting"
+            )
+            return None
+    else:
+        total_pages = get_total_pages_feedback(consultation=consultation)
+        feedbacks = []
+        for page in tqdm(
+            range(0, total_pages),
+            desc=f"Gathering feedback for consultation {consultation.id}",
+        ):
+            feedback_per_page = get_feedback_for_page(
+                consultation=consultation, page=page
+            )
+            feedbacks.extend(feedback_per_page)
+        return feedbacks
 
-                # Replace the original attachments with the processed ones
-                feedback["attachments"] = attachments
 
-            # Replace the original feedback with the processed feedback
-            item["feedback"] = feedback_data
-
-        processed_feedback_info.append(item)
-    return processed_feedback_info
+def scrape_topic(
+    topic: str,
+    max_pages: int | None = None,
+    max_feedback: int | None = None,
+) -> List[Initiative]:
+    initiative_ids = get_ids_for_topic(topic, max_pages=max_pages)
+    initiatives = []
+    for id in tqdm(initiative_ids, desc="Gathering initiative data"):
+        initiative = get_initiative_data(id)
+        initiatives.append(initiative)
+    for initiative in tqdm(initiatives, desc="Processing initiatives"):
+        for consultation in initiative.consultations:
+            try:
+                feedbacks = get_feedback_for_consultation(
+                    consultation, max_feedback=max_feedback
+                )
+                consultation.feedback = feedbacks
+            except Exception as e:
+                logger.error(
+                    f"Could not process consultation {consultation.id} initiative {initiative.id}: {e}"
+                )
+    return initiatives
