@@ -56,14 +56,15 @@ def scrape_topics(
 def scrape_initiative(id: int) -> List[Initiative]:
     initiatives = [get_initiative_data(id)]
     for initiative in tqdm(initiatives, desc="Processing initiatives"):
-        for consultation in initiative.consultations:
-            try:
-                feedbacks = get_feedback_for_consultation(consultation)
-                consultation.feedback = feedbacks
-            except Exception as e:
-                logger.error(
-                    f"Could not process consultation {consultation.id} initiative {initiative.id}: {e}"
-                )
+        if initiative.consultations is not None:
+            for consultation in initiative.consultations:
+                try:
+                    feedbacks = get_feedback_for_consultation(consultation)
+                    consultation.feedback = feedbacks
+                except Exception as e:
+                    logger.error(
+                        f"Could not process consultation {consultation.id} initiative {initiative.id}: {e}"
+                    )
     return initiatives
 
 

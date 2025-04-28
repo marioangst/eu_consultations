@@ -8,7 +8,7 @@ from eu_consultations.extract_filetext import (
     download_consultation_files,
     extract_text_from_attachments,
 )
-from eu_consultations.consultation_data import Consultation, Initiative
+from eu_consultations.consultation_data import Initiative
 
 OUTPUT_FILENAME = "consultation_data.json"
 

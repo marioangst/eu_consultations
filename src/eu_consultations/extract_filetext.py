@@ -89,27 +89,45 @@ def extract_text_from_attachments(
                     ):
                         if feedback.attachments is not None:
                             for attachment in feedback.attachments:
-                                logger.info(f"Extracting {attachment.downloaded_filepath}")
-                                result = converter.convert(attachment.downloaded_filepath)
-                                attachment.extracted_text = result.document.export_to_text()
-                                docling_dict = result.document.export_to_dict()
-                                docling_dump = DoclingDump.from_dict(docling_dict)
-                                attachment.docling_json = docling_dump
-                                if stream_out_folder is not None:
-                                    docling_out_folder = os.path.join(stream_out_folder, "docling")
-                                    if not os.path.exists(docling_out_folder):
-                                        os.makedirs(docling_out_folder)
-                                    srsly.write_json(
-                                        os.path.join(
-                                            docling_out_folder,
-                                            f"{str(attachment.document_id)}.json",
-                                        ),
-                                        docling_dict,
-                                    )
+                                if attachment.downloaded_filepath is not None:
+                                    try:
+                                        logger.info(
+                                            f"Extracting {attachment.downloaded_filepath}"
+                                        )
+                                        result = converter.convert(
+                                            attachment.downloaded_filepath
+                                        )
+                                        attachment.extracted_text = (
+                                            result.document.export_to_text()
+                                        )
+                                        docling_dict = result.document.export_to_dict()
+                                        docling_dump = DoclingDump.from_dict(
+                                            docling_dict
+                                        )
+                                        attachment.docling_json = docling_dump
+                                        if stream_out_folder is not None:
+                                            docling_out_folder = os.path.join(
+                                                stream_out_folder, "docling"
+                                            )
+                                            if not os.path.exists(docling_out_folder):
+                                                os.makedirs(docling_out_folder)
+                                            srsly.write_json(
+                                                os.path.join(
+                                                    docling_out_folder,
+                                                    f"{str(attachment.document_id)}.json",
+                                                ),
+                                                docling_dict,
+                                            )
+                                    except Exception as e:
+                                        logger.error(
+                                            f"Could not extract {attachment.downloaded_filepath}: {e}"
+                                        )
                     if stream_out_folder is not None:
                         save_to_json(
                             initiatives=[initiative],
-                            output_folder=os.path.join(stream_out_folder, "consultations"),
+                            output_folder=os.path.join(
+                                stream_out_folder, "consultations"
+                            ),
                             filename=f"{str(initiative.id)}.json",
                         )
     return initiatives_data_with_attachments
