@@ -8,7 +8,7 @@
 
 The package has three main functions:
 
-- Scrape metadata on feedback by the public to EU consultations by topic through accessing the API supplying the frontend to https://ec.europa.eu/info/law/better-regulation.
+- Scrape metadata on feedback by the public to EU consultations by topic and/ or text search (in title and description of consultations) through accessing the API supplying the frontend to https://ec.europa.eu/info/law/better-regulation.
 - Download files (e.g. .pdf and .docx) attached to feedback
 - Extract text from files using [docling](https://github.com/docling-project/docling)
 
@@ -32,7 +32,7 @@ The following describes the typical pipeline for using `eu-consultations`:
 
 ### 1) Get consultation data
 
-Here we will scrape data on consultation for the topic "DIGITAL". To get an overview over all possible topics, use:
+Here we will scrape data on consultations with the text "cloud" and "parrot" for the topic "DIGITAL". To get an overview over all possible topics, use:
 
 ```python
 from eu_consultations.scrape import show_available_topics
@@ -40,13 +40,14 @@ from eu_consultations.scrape import show_available_topics
 show_available_topics()
 ```
 
-Now let's scrape all metadata on feedback to consultations on the the topic "DIGITAL" (Digital economy and society).
+Now let's scrape all metadata on feedback to consultations on the the topic "DIGITAL" (Digital economy and society), where the search terms "cloud" or "parrot" appear.
 
 ```python
 from eu_consultations.scrape import scrape
 
 initiatives_data = scrape(
     topic_list=["DIGITAL"],
+    text_list=["cloud","parrot"],
     max_pages=None, # restrict number of frontend pages to crawl
     max_feedback = None, # set a maximum number of feedback to gather
     output_folder=<my-folder>,

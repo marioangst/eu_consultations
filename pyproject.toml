@@ -1,6 +1,6 @@
 [project]
 name = "eu-consultations"
-version = "0.2.3"
+version = "0.3.0"
 description = "A Python package for scraping textual data from EU public consultations"
 readme = "README.md"
 authors = [
@@ -21,6 +21,7 @@ dependencies = [
     "dataclass-wizard>=0.35.0",
     "tqdm>=4.67.1",
     "docling>=2.26.0",
+    "pypdf>=5.4.0",
 ]
 
 [project.urls]

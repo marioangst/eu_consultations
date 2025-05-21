@@ -48,6 +48,7 @@ TOPICS = {
 }
 
 INITIATIVES_PAGE_SIZE = 10
+LANGUAGE_SETTING = "EN"
 
 BASE_URL = "https://ec.europa.eu/info/law/better-regulation"
 
@@ -59,34 +60,47 @@ FEEDBACK_URL = "/api/allFeedback"
 # getting consultation ids
 
 
-def get_total_pages_initiatives(topic: str) -> int:
+def get_total_pages_initiatives(topic: str | None, text: str | None) -> int:
     url = BASE_URL + API_PATH_INITIATIVES
-    params = {"topic": topic, "page": 0, "size": INITIATIVES_PAGE_SIZE}
+    if topic is None:
+        params = {"page": 0, "size": INITIATIVES_PAGE_SIZE, "text": text, "language": LANGUAGE_SETTING}
+    if text is None:
+        params = {"page": 0, "size": INITIATIVES_PAGE_SIZE, "topic": topic}
+    if text is not None and topic is not None:
+        params = {"topic": topic, "page": 0, "size": INITIATIVES_PAGE_SIZE, "text": text, "language": LANGUAGE_SETTING}
     r = httpx.get(url, params=params, timeout=None)
     total_pages = r.json()["page"]["totalPages"]
     return total_pages
 
 
-def get_ids_for_page_initiatives(topic, page) -> List[int]:
+def get_ids_for_page_initiatives(topic: str | None, text: str | None, page: int) -> List[int]:
     url = BASE_URL + API_PATH_INITIATIVES
-    params = {"topic": topic, "page": page, "size": INITIATIVES_PAGE_SIZE}
+    if topic is None:
+        params = {"page": page, "size": INITIATIVES_PAGE_SIZE, "text": text, "language": LANGUAGE_SETTING}
+    if text is None:
+        params = {"page": page, "size": INITIATIVES_PAGE_SIZE, "topic": topic}
+    if text is not None and topic is not None:
+        params = {"topic": topic, "page": page, "size": INITIATIVES_PAGE_SIZE, "text": text, "language": LANGUAGE_SETTING}
     r = httpx.get(url, params=params, timeout=None)
     initiatives = r.json()["_embedded"]["initiativeResultDtoes"]
     ids = [int(initiative["id"]) for initiative in initiatives]
     return ids
 
 
-def get_ids_for_topic(topic: str, max_pages: int | None = None) -> List[int]:
+def get_ids_for_query(topic: str | None, text: str | None, max_pages: int | None = None) -> List[int]:
+    total_pages_found = get_total_pages_initiatives(topic, text)
     if max_pages is not None:
-        total_pages = max_pages
+        total_pages_to_scrape = max_pages
         logger.warning(f"scrapping only {max_pages} page due to max_pages setting")
     else:
-        total_pages = get_total_pages_initiatives(topic)
+        total_pages_to_scrape = total_pages_found
     ids = []
-    for page in tqdm(range(0, total_pages), desc="Gathering page ids"):
-        page_ids = get_ids_for_page_initiatives(topic, page)
-        ids.extend(page_ids)
+    if total_pages_found > 0:
+        for page in tqdm(range(0, total_pages_to_scrape), desc="Gathering page ids"):
+            page_ids = get_ids_for_page_initiatives(topic = topic, text = text, page = page)
+            ids.extend(page_ids)
     return ids
+
 
 
 # get data on initiatives for specific initiative id
@@ -177,12 +191,13 @@ def get_feedback_for_consultation(
         return feedbacks
 
 
-def scrape_topic(
-    topic: str,
+def scrape_query(
+    topic: str | None,
+    text: str | None,
     max_pages: int | None = None,
     max_feedback: int | None = None,
 ) -> List[Initiative]:
-    initiative_ids = get_ids_for_topic(topic, max_pages=max_pages)
+    initiative_ids = get_ids_for_query(topic = topic, text = text, max_pages=max_pages)
     initiatives = []
     for id in tqdm(initiative_ids, desc="Gathering initiative data"):
         initiative = get_initiative_data(id)
